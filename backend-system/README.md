@@ -1,9 +1,9 @@
-# Cortex AI Backend
+# Backend System
 
-A clean, extensible **Node.js + Express.js** backend foundation for the Cortex AI
+A clean, extensible **Node.js + Express.js** backend foundation for the Internship
 project. It comes with a running Express server, a connected **MongoDB**
 database (via Mongoose), an organized folder structure, and basic safety
-features — ready for future features (including AI-related ones) to be built on
+features — ready for future features to be built on
 top of it.
 
 ---
