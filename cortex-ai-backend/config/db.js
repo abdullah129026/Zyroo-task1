@@ -28,7 +28,6 @@ const connectDB = async () => {
     throw err;
   }
 };
-
 /** Disconnect from MongoDB (used during graceful shutdown). */
 const disconnectDB = async () => {
   if (mongoose.connection.readyState === 0) return;

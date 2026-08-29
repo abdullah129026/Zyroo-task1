@@ -8,20 +8,19 @@ const apiRoutes = require('./routes');
 
 const app = express();
 
-// Disable the x-powered-by header (minor hardening).
+// Disable the x-powered-by header.
 app.disable('x-powered-by');
 
-// CORS: allow configured frontend origins to talk to this API.
+// CORS.
 app.use(cors(corsOptions));
 
-// Body parsing.
+//Body parsing.
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Simple request logger: logs every incoming request.
+//Simple request logger: logs every incoming request.
 app.use(requestLogger);
 
-// Root route: quick orientation point.
+//  Root route: quick orientation point.
 app.get('/', (_req, res) => {
   res.status(200).json({
     success: true,
@@ -29,13 +28,14 @@ app.get('/', (_req, res) => {
   });
 });
 
-// Mount API routes.
+//It Mounts API routes.
 app.use('/api', apiRoutes);
 
-// 404 fallback for unknown routes.
+//404 fallback for unknown routes.
 app.use(notFound);
 
-// Global error-handling middleware (always last).
+//Global error-handling middleware.
 app.use(errorHandler);
+
 
 module.exports = app;

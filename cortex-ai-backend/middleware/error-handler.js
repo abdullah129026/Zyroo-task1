@@ -7,13 +7,11 @@ const notFound = (req, _res, next) => {
   err.statusCode = 404;
   next(err);
 };
-
 /**
  * Global error-handling middleware.
  * Returns consistent JSON error responses for every error in the app.
  * Stack traces are only exposed in development.
  */
-// eslint-disable-next-line no-unused-vars
 const errorHandler = (err, _req, res, _next) => {
   const statusCode = err.statusCode || err.status || 500;
   const isProduction = process.env.NODE_ENV === 'production';
@@ -21,7 +19,6 @@ const errorHandler = (err, _req, res, _next) => {
   if (!isProduction) {
     console.error(`[ERROR] ${err.stack || err.message}`);
   }
-
   const body = {
     success: false,
     message:

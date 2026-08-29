@@ -1,6 +1,7 @@
 const { getDBState } = require('../config/db');
 const { successResponse } = require('../utils/api-response');
 
+
 /**
  * GET /api/health
  * Confirms the server is up and reports the current database state.
