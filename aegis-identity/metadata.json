@@ -1,0 +1,7 @@
+{
+  "name": "Aegis Identity",
+  "description": "Enterprise developer identity and access orchestration platform featuring OAuth 2.1, Passkeys, interactive API sandbox, and live telemetry inspector.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

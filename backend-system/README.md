@@ -1,9 +1,9 @@
-# Cortex AI Backend
+# Backend
 
-A clean, extensible **Node.js + Express.js** backend foundation for the Cortex AI
+A clean, extensible **Node.js + Express.js** backend foundation for the Internship
 project. It comes with a running Express server, a connected **MongoDB**
 database (via Mongoose), an organized folder structure, and basic safety
-features — ready for future features (including AI-related ones) to be built on
+features — ready for future features to be built on
 top of it.
 
 ---
@@ -98,10 +98,13 @@ cp .env.example .env
 PORT=3001
 NODE_ENV=development
 CORS_ORIGIN=*
-MONGODB_URI=mongodb+srv://<db_user>:<db_password>@<cluster>.mongodb.net/<db_name>?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://<db_user>:<db_password>@<cluster>.mongodb.net/?appName=Abdullah
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production-min-32-chars
 ```
 
 > ⚠️ **Never commit `.env`.** It is already excluded via `.gitignore`.
+
+**Note**: If you get a MongoDB connection error about IP whitelisting, see [MONGODB_SETUP.md](./MONGODB_SETUP.md)
 
 ### 3. Run the server
 
@@ -147,9 +150,71 @@ Expected JSON response:
 
 ## 📡 API Endpoints
 
-| Method | Endpoint       | Description                              |
-| ------ | -------------- | ---------------------------------------- |
-| GET    | `/api/health`  | Server & database health check           |
+| Method | Endpoint              | Description                              | Auth Required |
+| ------ | --------------------- | ---------------------------------------- | ------------- |
+| GET    | `/api/health`         | Server & database health check           | No            |
+| POST   | `/api/auth/register`  | Register a new user                      | No            |
+| POST   | `/api/auth/login`     | Login and receive JWT token              | No            |
+| GET    | `/api/auth/me`        | Get current authenticated user info      | Yes           |
+
+---
+
+## 🔐 Authentication (Week 2)
+
+This week adds **JWT-based authentication** with secure password hashing.
+
+### Key Features
+
+- ✅ User registration with password validation
+- ✅ Secure login with bcrypt password comparison
+- ✅ JWT token generation (7-day expiry)
+- ✅ Protected routes via authentication middleware
+- ✅ Passwords hashed before database storage
+- ✅ Unique email constraint
+
+### Quick Start
+
+#### 1. Register a User
+```bash
+curl -X POST http://localhost:3001/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "John Doe",
+    "email": "john@example.com",
+    "password": "SecurePassword123",
+    "passwordConfirm": "SecurePassword123"
+  }'
+```
+
+#### 2. Login
+```bash
+curl -X POST http://localhost:3001/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john@example.com",
+    "password": "SecurePassword123"
+  }'
+```
+
+Response includes `token` — save this for authenticated requests.
+
+#### 3. Access Protected Route
+```bash
+curl -X GET http://localhost:3001/api/auth/me \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+```
+
+### 📖 Detailed Documentation
+
+See [AUTH_ENDPOINTS.md](./AUTH_ENDPOINTS.md) for complete endpoint documentation, request/response examples, and error codes.
+
+### 🧪 Testing with Postman
+
+1. Import `Cortex_AI_Auth_Collection.postman_collection.json` into Postman
+2. Set environment variable `base_url` to `http://localhost:3001`
+3. Run the collection in order (Register → Login → Get Current User)
+
+The collection auto-extracts and saves the JWT token for protected routes.
 
 ---
 
