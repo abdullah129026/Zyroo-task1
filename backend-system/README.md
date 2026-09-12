@@ -175,8 +175,8 @@ Expected JSON response:
 
 ## 🔒 Safety Notes
 
-- Secrets live in `.env` only — never hardcoded in source.
-- `.env` and `node_modules/` are excluded from Git.
+- Secrets live in `.env` only — never hardcoded in the source.
+- `.env` and `node_modules/` are excluded from Git and installed on npm install.
 - Global error middleware ensures clients always get a consistent JSON
   response (stack traces are hidden in production).
 - A request logger tracks method, URL, status and duration for every request.
