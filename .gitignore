@@ -1,8 +1,6 @@
 # Root-level gitignore for the Zyroo-task1 repository.
 
 # Backend project: dependencies and secrets are never committed
-cortex-ai-backend/node_modules/
-cortex-ai-backend/.env
 
 # General
 .DS_Store

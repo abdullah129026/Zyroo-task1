@@ -1,4 +1,4 @@
-# Backend
+# Backend System
 
 A clean, extensible **Node.js + Express.js** backend foundation for the Internship
 project. It comes with a running Express server, a connected **MongoDB**
@@ -150,12 +150,19 @@ Expected JSON response:
 
 ## 📡 API Endpoints
 
-| Method | Endpoint              | Description                              | Auth Required |
-| ------ | --------------------- | ---------------------------------------- | ------------- |
-| GET    | `/api/health`         | Server & database health check           | No            |
-| POST   | `/api/auth/register`  | Register a new user                      | No            |
-| POST   | `/api/auth/login`     | Login and receive JWT token              | No            |
-| GET    | `/api/auth/me`        | Get current authenticated user info      | Yes           |
+| Method | Endpoint                        | Description                              | Auth Required |
+| ------ | ------------------------------- | ---------------------------------------- | ------------- |
+| GET    | `/api/health`                   | Server & database health check           | No            |
+| POST   | `/api/auth/register`            | Register a new user                      | No            |
+| POST   | `/api/auth/login`               | Login and receive JWT token              | No            |
+| GET    | `/api/auth/me`                  | Get current authenticated user info      | Yes           |
+| POST   | `/api/documents`                | Upload document (PDF, DOCX, TXT)         | Yes           |
+| GET    | `/api/documents`                | List user's documents                    | Yes           |
+| GET    | `/api/documents/stats`          | Get document processing statistics       | Yes           |
+| GET    | `/api/documents/:id`            | Get document details with chunks         | Yes           |
+| DELETE | `/api/documents/:id`            | Delete document and cascade chunks       | Yes           |
+| POST   | `/api/documents/search`         | Semantic search across documents         | Yes           |
+| POST   | `/api/documents/search/retry/:id` | Retry failed chunk embedding           | Yes           |
 
 ---
 
@@ -215,6 +222,59 @@ See [AUTH_ENDPOINTS.md](./AUTH_ENDPOINTS.md) for complete endpoint documentation
 3. Run the collection in order (Register → Login → Get Current User)
 
 The collection auto-extracts and saves the JWT token for protected routes.
+
+---
+
+## 📄 Document Processing & Semantic Search (Weeks 3-4)
+
+This phase adds intelligent document processing with semantic search capabilities.
+
+### Key Features
+
+- ✅ Multi-format document upload (PDF, DOCX, TXT)
+- ✅ Intelligent text extraction and chunking (500-token chunks with 50-token overlap)
+- ✅ Vector embeddings using Google Gemini API
+- ✅ Semantic search with cosine similarity
+- ✅ MongoDB Atlas vector indexing
+- ✅ Automatic retry logic with exponential backoff
+- ✅ Cascading deletes (document deletion removes all chunks and files)
+
+### Quick Start
+
+#### 1. Set Google Gemini API Key
+
+Get your key from https://aistudio.google.com/apikey and add to `.env`:
+
+```env
+GOOGLE_GEMINI_API_KEY=your-api-key-here
+```
+
+#### 2. Upload a Document
+
+```bash
+curl -X POST http://localhost:3001/api/documents \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "file=@sample.pdf"
+```
+
+Document processes automatically in background. Status: `processing` → `ready` (30-60s)
+
+#### 3. Search Documents
+
+```bash
+curl -X POST http://localhost:3001/api/documents/search \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is machine learning?", "topK": 5}'
+```
+
+Returns most similar chunks sorted by relevance (cosine similarity).
+
+### 📖 Detailed Documentation
+
+See [DOCUMENT_PROCESSING.md](./DOCUMENT_PROCESSING.md) for complete setup including MongoDB Atlas vector index configuration.
+
+See [TESTING_GUIDE.md](./TESTING_GUIDE.md) for comprehensive testing walkthrough with all 13 test cases.
 
 ---
 
