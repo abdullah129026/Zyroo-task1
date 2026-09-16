@@ -275,7 +275,7 @@ const userSubscriptions = await Subscription.find({ userId: req.user.userId });
    ```
 
 ### Frontend App Location
-Already created at: `D:\Work\Zyroo-Task1\aegis-identity`
+Previously created under `aegis-identity` (now removed from this repository).
 - Has login page ready
 - Has register page ready
 - Can integrate with these auth endpoints
