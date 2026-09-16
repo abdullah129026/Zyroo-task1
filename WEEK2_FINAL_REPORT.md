@@ -271,7 +271,7 @@ Configuration Files: 2
 ## Integration with Frontend
 
 ### Frontend Location
-`D:\Work\Zyroo-Task1\aegis-identity` (already created)
+Frontend project was previously tracked under `aegis-identity` and has been removed from this repository.
 
 ### Integration Steps
 1. Frontend calls `POST /api/auth/register` to create account

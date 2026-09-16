@@ -159,7 +159,7 @@ backend-system/
 2. Restart server: `npm start`
 3. Test with Postman
 4. Verify passwords are hashed in database
-5. Integrate frontend (aegis-identity project)
+5. Integrate frontend application with auth endpoints
 
 ---
 
