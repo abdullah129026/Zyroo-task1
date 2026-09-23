@@ -6,10 +6,6 @@ const { extractText } = require('../services/textExtraction');
 const { chunkText } = require('../services/chunking');
 const { generateEmbedding } = require('../services/embeddings');
 
-/**
- * Handle document upload and processing
- * POST /api/documents
- */
 async function uploadDocument(req, res) {
   try {
     const { userId } = req.user;
@@ -25,15 +21,15 @@ async function uploadDocument(req, res) {
     const supportedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
 
     if (!supportedTypes.includes(file.mimetype)) {
-      // Clean up uploaded file if not supported
-      fs.unlinkSync(file.path);
+      if (fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+      }
       return res.status(400).json({
         statusCode: 400,
         message: 'Unsupported file type. Supported: PDF, DOCX, TXT',
       });
     }
 
-    // Determine file type
     let fileType;
     if (file.mimetype === 'application/pdf') {
       fileType = 'pdf';
@@ -43,7 +39,6 @@ async function uploadDocument(req, res) {
       fileType = 'txt';
     }
 
-    // Create document record
     const document = new Document({
       owner: userId,
       filename: file.originalname,
@@ -54,8 +49,6 @@ async function uploadDocument(req, res) {
     });
 
     await document.save();
-
-    // Process document asynchronously
     processDocumentAsync(document._id);
 
     return res.status(201).json({
@@ -71,7 +64,7 @@ async function uploadDocument(req, res) {
     });
   } catch (error) {
     console.error('Upload error:', error);
-    if (req.file) {
+    if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
     return res.status(500).json({
@@ -82,9 +75,6 @@ async function uploadDocument(req, res) {
   }
 }
 
-/**
- * Process document: extract text, create chunks, generate embeddings
- */
 async function processDocumentAsync(documentId) {
   try {
     const document = await Document.findById(documentId);
@@ -93,15 +83,11 @@ async function processDocumentAsync(documentId) {
       throw new Error('Document not found');
     }
 
-    // Step 1: Extract text
     const { text, pageCount } = await extractText(document.filePath, document.fileType);
-
     document.pageCount = pageCount;
 
-    // Step 2: Create chunks
     const chunks = chunkText(text);
 
-    // Step 3: Save chunks to database and generate embeddings
     const chunkDocs = chunks.map((chunk, index) => ({
       document: documentId,
       chunkIndex: index,
@@ -113,10 +99,8 @@ async function processDocumentAsync(documentId) {
     const savedChunks = await Chunk.insertMany(chunkDocs);
     document.chunkCount = savedChunks.length;
 
-    // Step 4: Generate embeddings for all chunks
     await generateChunkEmbeddings(savedChunks, documentId);
 
-    // Update document status
     document.status = 'ready';
     await document.save();
 
@@ -124,7 +108,6 @@ async function processDocumentAsync(documentId) {
   } catch (error) {
     console.error(`Error processing document ${documentId}:`, error);
 
-    // Update document with error status
     try {
       await Document.findByIdAndUpdate(documentId, {
         status: 'failed',
@@ -136,9 +119,6 @@ async function processDocumentAsync(documentId) {
   }
 }
 
-/**
- * Generate embeddings for all chunks of a document
- */
 async function generateChunkEmbeddings(chunks, documentId) {
   let embeddedCount = 0;
 
@@ -152,8 +132,6 @@ async function generateChunkEmbeddings(chunks, documentId) {
       });
 
       embeddedCount++;
-
-      // Add delay between API calls to avoid rate limiting
       await new Promise((resolve) => setTimeout(resolve, 100));
     } catch (error) {
       console.error(`Failed to embed chunk ${chunk._id}:`, error);
@@ -166,16 +144,11 @@ async function generateChunkEmbeddings(chunks, documentId) {
     }
   }
 
-  // Update document with embedded chunk count
   await Document.findByIdAndUpdate(documentId, {
     embeddedChunkCount: embeddedCount,
   });
 }
 
-/**
- * Get all documents for a user
- * GET /api/documents
- */
 async function getUserDocuments(req, res) {
   try {
     const { userId } = req.user;
@@ -199,10 +172,6 @@ async function getUserDocuments(req, res) {
   }
 }
 
-/**
- * Get single document with chunks
- * GET /api/documents/:id
- */
 async function getDocument(req, res) {
   try {
     const { id } = req.params;
@@ -239,10 +208,6 @@ async function getDocument(req, res) {
   }
 }
 
-/**
- * Delete document and cascade-delete chunks
- * DELETE /api/documents/:id
- */
 async function deleteDocument(req, res) {
   try {
     const { id } = req.params;
@@ -257,15 +222,11 @@ async function deleteDocument(req, res) {
       });
     }
 
-    // Delete file from disk
     if (fs.existsSync(document.filePath)) {
       fs.unlinkSync(document.filePath);
     }
 
-    // Delete all chunks associated with document
     await Chunk.deleteMany({ document: id });
-
-    // Delete document
     await Document.findByIdAndDelete(id);
 
     return res.status(200).json({
@@ -282,10 +243,6 @@ async function deleteDocument(req, res) {
   }
 }
 
-/**
- * Get processing statistics for a user's documents
- * GET /api/documents/stats
- */
 async function getDocumentStats(req, res) {
   try {
     const { userId } = req.user;

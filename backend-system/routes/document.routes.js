@@ -1,69 +1,37 @@
 const express = require('express');
-const multer = require('multer');
-const path = require('path');
-const authenticateToken = require('../middleware/auth');
-const {
-  uploadDocument,
-  getUserDocuments,
-  getDocument,
-  deleteDocument,
-  getDocumentStats,
-} = require('../controllers/document.controller');
-const { semanticSearch, retryChunkEmbedding } = require('../controllers/search.controller');
-
 const router = express.Router();
+const { authenticate } = require('../middleware/auth');
+const upload = require('../middleware/upload');
+const documentController = require('../controllers/document.controller');
 
-// Configure multer for file upload
-const uploadsDir = 'C:\\Users\\Shahid computers\\Downloads';
+/**
+ * POST /api/documents
+ * Upload a document (PDF, DOCX, TXT)
+ */
+router.post('/', authenticate, upload.single('file'), documentController.uploadDocument);
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    // Create unique filename with timestamp
-    const uniqueName = `${Date.now()}-${file.originalname}`;
-    cb(null, uniqueName);
-  },
-});
+/**
+ * GET /api/documents
+ * Get all documents for the user
+ */
+router.get('/', authenticate, documentController.getUserDocuments);
 
-const fileFilter = (req, file, cb) => {
-  // Only allow specific file types
-  const allowedMimes = [
-    'application/pdf',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'text/plain',
-  ];
+/**
+ * GET /api/documents/stats
+ * Get document processing statistics
+ */
+router.get('/stats', authenticate, documentController.getDocumentStats);
 
-  if (allowedMimes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(
-      new Error(
-        'Invalid file type. Only PDF, DOCX, and TXT files are allowed.'
-      ),
-      false
-    );
-  }
-};
+/**
+ * GET /api/documents/:id
+ * Get single document with chunks
+ */
+router.get('/:id', authenticate, documentController.getDocument);
 
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: {
-    fileSize: 25 * 1024 * 1024, // 25 MB limit
-  },
-});
-
-// Document routes (must be before :id routes to avoid conflict)
-router.post('/', authenticateToken, upload.single('file'), uploadDocument);
-router.get('/', authenticateToken, getUserDocuments);
-router.get('/stats', authenticateToken, getDocumentStats);
-router.get('/:id', authenticateToken, getDocument);
-router.delete('/:id', authenticateToken, deleteDocument);
-
-// Search routes (separate from documents to avoid routing conflicts)
-router.post('/search', authenticateToken, semanticSearch);
-router.post('/search/retry/:chunkId', authenticateToken, retryChunkEmbedding);
+/**
+ * DELETE /api/documents/:id
+ * Delete a document
+ */
+router.delete('/:id', authenticate, documentController.deleteDocument);
 
 module.exports = router;
