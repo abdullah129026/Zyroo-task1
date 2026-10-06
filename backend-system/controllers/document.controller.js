@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const Document = require('../models/Document');
 const Chunk = require('../models/Chunk');
+const User = require('../models/User');
 const { extractText } = require('../services/textExtraction');
 const { chunkText } = require('../services/chunking');
 const { generateEmbedding } = require('../services/embeddings');
@@ -49,6 +50,15 @@ async function uploadDocument(req, res) {
     });
 
     await document.save();
+
+    // Usage accounting for the plan quota
+    await User.findByIdAndUpdate(userId, {
+      $inc: {
+        'usage.documentsUploaded': 1,
+        'usage.storageUsed': file.size,
+      },
+    });
+
     processDocumentAsync(document._id);
 
     return res.status(201).json({

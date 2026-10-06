@@ -1,5 +1,6 @@
 const Chunk = require('../models/Chunk');
 const Document = require('../models/Document');
+const User = require('../models/User');
 const { generateEmbedding, cosineSimilarity } = require('../services/embeddings');
 
 /**
@@ -72,6 +73,11 @@ async function semanticSearch(req, res) {
       }))
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, topK);
+
+    // Usage accounting for the plan quota (one search = one message)
+    await User.findByIdAndUpdate(userId, {
+      $inc: { 'usage.messagesSent': 1 },
+    });
 
     return res.status(200).json({
       statusCode: 200,

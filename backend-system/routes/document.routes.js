@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
+const { requireQuota } = require('../middleware/quota');
 const upload = require('../middleware/upload');
 const documentController = require('../controllers/document.controller');
 
@@ -8,7 +9,7 @@ const documentController = require('../controllers/document.controller');
  * POST /api/documents
  * Upload a document (PDF, DOCX, TXT)
  */
-router.post('/', authenticate, upload.single('file'), documentController.uploadDocument);
+router.post('/', authenticate, upload.single('file'), requireQuota('documents'), documentController.uploadDocument);
 
 /**
  * GET /api/documents

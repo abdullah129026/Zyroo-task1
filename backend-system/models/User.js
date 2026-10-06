@@ -26,6 +26,39 @@ const userSchema = new mongoose.Schema(
       minlength: [6, 'Password must be at least 6 characters long'],
       select: false, // Don't return password by default in queries
     },
+    // Subscription & billing (Week 6)
+    plan: {
+      type: String,
+      enum: ['free', 'pro', 'team'],
+      default: 'free',
+    },
+    stripeCustomerId: {
+      type: String,
+      default: null,
+    },
+    stripeSubscriptionId: {
+      type: String,
+      default: null,
+    },
+    subscriptionStatus: {
+      type: String,
+      enum: ['none', 'active', 'past_due', 'incomplete', 'trialing', 'canceled'],
+      default: 'none',
+    },
+    // Usage within the current billing period
+    usage: {
+      documentsUploaded: { type: Number, default: 0 },
+      messagesSent: { type: Number, default: 0 },
+      storageUsed: { type: Number, default: 0 }, // bytes
+    },
+    currentPeriodStart: {
+      type: Date,
+      default: null,
+    },
+    currentPeriodEnd: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true, // Automatically adds createdAt and updatedAt

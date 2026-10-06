@@ -385,6 +385,96 @@ Check server and database status.
 
 ---
 
+## Billing Endpoints
+
+### GET /billing/plans
+Public. List subscription tiers with their limits.
+
+**Response (200):**
+```json
+{
+  "statusCode": 200,
+  "data": [
+    {
+      "id": "free",
+      "name": "Free",
+      "priceMonthly": 0,
+      "limits": { "maxDocuments": 5, "maxMessages": 50, "maxStorageBytes": 52428800 }
+    },
+    {
+      "id": "pro",
+      "name": "Pro",
+      "priceMonthly": 12,
+      "limits": { "maxDocuments": 100, "maxMessages": 2000, "maxStorageBytes": 5368709120 }
+    },
+    {
+      "id": "team",
+      "name": "Team",
+      "priceMonthly": 49,
+      "limits": { "maxDocuments": 1000, "maxMessages": 20000, "maxStorageBytes": 53687091200 }
+    }
+  ],
+  "message": "Plans retrieved successfully"
+}
+```
+
+### GET /billing/me
+Auth required. Current plan, subscription status, usage and billing period.
+
+**Response (200):**
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "plan": "pro",
+    "planName": "Pro",
+    "subscriptionStatus": "active",
+    "usage": { "documentsUploaded": 3, "messagesSent": 41, "storageUsed": 12582912 },
+    "limits": { "maxDocuments": 100, "maxMessages": 2000, "maxStorageBytes": 5368709120 },
+    "currentPeriodStart": "2026-10-01T00:00:00Z",
+    "currentPeriodEnd": "2026-10-31T00:00:00Z"
+  },
+  "message": "Billing status retrieved successfully"
+}
+```
+
+### POST /billing/checkout
+Auth required. Create a Stripe Checkout session to upgrade.
+
+**Request:**
+```json
+{ "planId": "pro" }
+```
+
+**Response (200):**
+```json
+{
+  "statusCode": 200,
+  "data": { "url": "https://checkout.stripe.com/...", "sessionId": "cs_..." },
+  "message": "Checkout session created"
+}
+```
+
+### POST /billing/cancel
+Auth required. Cancel the active Stripe subscription immediately.
+The `customer.subscription.deleted` webhook moves the user back to Free.
+
+**Response (200):**
+```json
+{
+  "statusCode": 200,
+  "data": null,
+  "message": "Subscription cancelled. Your plan will revert to Free once Stripe confirms."
+}
+```
+
+### POST /webhooks/stripe
+Stripe webhook receiver. Verifies the `stripe-signature` header against the
+raw request body, then syncs the user on `checkout.session.completed`,
+`customer.subscription.updated`, and `customer.subscription.deleted`.
+
+---
+
 ## Error Responses
 
 All errors follow this format:

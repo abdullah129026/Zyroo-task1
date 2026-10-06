@@ -3,6 +3,7 @@ require('dotenv').config();
 const app = require('./app');
 const { connectDB, disconnectDB } = require('./config/db');
 const { initializeClient } = require('./services/embeddings');
+const { startUsageResetJob } = require('./jobs/usageReset');
 
 const PORT = Number(process.env.PORT) || 3001;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -33,6 +34,9 @@ async function startServer() {
     console.log(`[SERVER] Cortex AI API is running at http://localhost:${PORT}`);
     console.log(`[SERVER] Environment: ${process.env.NODE_ENV || 'development'}`);
   });
+
+  // Nightly usage-counter reset for billing periods
+  startUsageResetJob();
 
   // Graceful shutdown.
   const shutdown = (signal) => {

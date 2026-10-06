@@ -30,6 +30,8 @@
     "mammoth": "^1.12.3",
     "mongoose": "^7.5.0",
     "multer": "^2.4.0",
-    "pdf-parse": "^2.4.5"
+    "node-cron": "^4.6.0",
+    "pdf-parse": "^2.4.5",
+    "stripe": "^23.0.0"
   }
 }
