@@ -600,3 +600,128 @@ curl -X POST http://localhost:3001/api/search \
   -H "Content-Type: application/json" \
   -d '{"query":"search term","topK":5}'
 ```
+
+## Chat Endpoints
+
+RAG-powered chat. Every reply is grounded in retrieved document chunks and
+returned with its cited sources. Sending a message counts against the plan's
+message quota, same as search.
+
+### POST /chat/sessions
+Create a chat session.
+
+**Headers:**
+```
+Authorization: <redacted>
+Content-Type: application/json
+```
+
+**Request:**
+```json
+{
+  "title": "Refund policy Q&A",
+  "documentIds": ["671a1b2c3d4e5f60718293a4"]
+}
+```
+`documentIds` is optional. When set, retrieval is scoped to those documents
+(each id must belong to the user). Omit it to search all of the user's
+documents.
+
+**Response (201):**
+```json
+{
+  "statusCode": 201,
+  "data": {
+    "_id": "671a1b2c3d4e5f60718293b5",
+    "owner": "671a1b2c3d4e5f60718293a0",
+    "title": "Refund policy Q&A",
+    "documentIds": ["671a1b2c3d4e5f60718293a4"],
+    "createdAt": "2026-10-17T07:00:00Z",
+    "updatedAt": "2026-10-17T07:00:00Z"
+  },
+  "message": "Chat session created successfully"
+}
+```
+
+### GET /chat/sessions
+Auth required. List the user's sessions, most recently active first.
+
+### DELETE /chat/sessions/:id
+Auth required. Delete a session and all of its messages.
+
+### POST /chat/sessions/:id/messages
+Send a message and get the AI's reply. The backend embeds the message,
+retrieves the top-k chunks via the same ranking as `/search`, builds a
+prompt with the chunks as delimited untrusted context, calls the LLM and
+stores the reply with its cited sources.
+
+**Request:**
+```json
+{
+  "content": "What is the refund window?",
+  "topK": 5
+}
+```
+
+**Response (200):**
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "reply": "The refund window is 30 days from purchase.",
+    "sources": [
+      {
+        "chunk": "671a1b2c3d4e5f60718293c1",
+        "document": "671a1b2c3d4e5f60718293a4",
+        "score": 0.87,
+        "chunkIndex": 3,
+        "documentName": "policy.pdf"
+      }
+    ],
+    "chunksUsed": 2,
+    "message": { "_id": "671a1b2c3d4e5f60718293d2", "role": "assistant", "...": "..." },
+    "sessionId": "671a1b2c3d4e5f60718293b5"
+  },
+  "message": "Reply generated successfully"
+}
+```
+
+### POST /chat/sessions/:id/messages/stream
+Same as above, but the reply streams token-by-token via Server-Sent Events.
+
+**Response:** `Content-Type: text/event-stream`
+```
+data: {"token": "The refund"}
+
+data: {"token": " window is"}
+
+data: {"done": true, "sources": [...], "chunksUsed": 2}
+```
+On failure mid-stream: `data: {"error": "..."}`.
+
+### GET /chat/sessions/:id/messages
+Auth required. Full message history, oldest first. Optional `?limit` (default
+100, max 500).
+
+**Example:**
+```bash
+curl -X POST http://localhost:3001/api/chat/sessions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Refund policy Q&A"}'
+
+curl -X POST http://localhost:3001/api/chat/sessions/<id>/messages \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"content":"What is the refund window?"}'
+```
+
+**Environment:**
+- `GEMINI_CHAT_MODEL` — chat model (default `gemini-2.0-flash`)
+- `GEMINI_MAX_OUTPUT_TOKENS` — reply length cap (default `1024`)
+- `RAG_MAX_CONTEXT_TOKENS` — retrieved-context budget per prompt (default `6000`)
+
+**Guardrails:** retrieved chunks are wrapped in `<retrieved-context>` blocks
+and the system prompt instructs the model to treat them as untrusted data
+that must never override instructions. A basic heuristic scan logs a warning
+when a chunk contains common instruction-override phrasings.

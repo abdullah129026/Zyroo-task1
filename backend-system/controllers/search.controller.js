@@ -1,7 +1,5 @@
-const Chunk = require('../models/Chunk');
-const Document = require('../models/Document');
 const User = require('../models/User');
-const { generateEmbedding, cosineSimilarity } = require('../services/embeddings');
+const { retrieveRelevantChunks } = require('../services/retrieval');
 
 /**
  * Semantic search across documents
@@ -15,64 +13,20 @@ async function semanticSearch(req, res) {
     const { userId } = req.user;
     const { query, documentId, topK = 5 } = req.body;
 
-    if (!query || typeof query !== 'string' || query.trim().length === 0) {
-      return res.status(400).json({
-        statusCode: 400,
-        message: 'Query is required and must be a non-empty string',
-      });
-    }
+    const results = await retrieveRelevantChunks({
+      userId,
+      query,
+      documentIds: documentId ? [documentId] : null,
+      topK,
+    });
 
-    // Generate embedding for query
-    const queryEmbedding = await generateEmbedding(query);
-
-    // Build filter for chunks
-    let filter = {
-      embeddingStatus: 'completed',
-      embedding: { $exists: true },
-    };
-
-    if (documentId) {
-      // Verify user owns the document
-      const doc = await Document.findOne({ _id: documentId, owner: userId });
-      if (!doc) {
-        return res.status(404).json({
-          statusCode: 404,
-          message: 'Document not found',
-        });
-      }
-      filter.document = documentId;
-    } else {
-      // Get all documents owned by user
-      const userDocs = await Document.find({ owner: userId }).select('_id');
-      const docIds = userDocs.map((d) => d._id);
-      filter.document = { $in: docIds };
-    }
-
-    // Get all matching chunks
-    const chunks = await Chunk.find(filter)
-      .populate('document', 'filename fileType')
-      .lean();
-
-    if (chunks.length === 0) {
+    if (results.length === 0) {
       return res.status(200).json({
         statusCode: 200,
         data: [],
         message: 'No documents found with embeddings',
       });
     }
-
-    // Calculate similarity scores
-    const results = chunks
-      .map((chunk) => ({
-        _id: chunk._id,
-        chunkIndex: chunk.chunkIndex,
-        text: chunk.text,
-        tokenCount: chunk.tokenCount,
-        document: chunk.document,
-        similarity: cosineSimilarity(queryEmbedding, chunk.embedding),
-      }))
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, topK);
 
     // Usage accounting for the plan quota (one search = one message)
     await User.findByIdAndUpdate(userId, {
@@ -91,10 +45,11 @@ async function semanticSearch(req, res) {
     });
   } catch (error) {
     console.error('Search error:', error);
-    return res.status(500).json({
-      statusCode: 500,
-      message: 'Search failed',
-      error: error.message,
+    const status = error.statusCode || 500;
+    return res.status(status).json({
+      statusCode: status,
+      message: status === 500 ? 'Search failed' : error.message,
+      ...(status === 500 ? { error: error.message } : {}),
     });
   }
 }

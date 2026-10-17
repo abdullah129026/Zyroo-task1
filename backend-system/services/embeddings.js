@@ -11,6 +11,17 @@ function initializeClient(apiKey) {
 }
 
 /**
+ * Return the shared Gemini client (initialized in server.js).
+ * @returns {GoogleGenerativeAI}
+ */
+function getClient() {
+  if (!client) {
+    throw new Error('Gemini client not initialized. Call initializeClient first.');
+  }
+  return client;
+}
+
+/**
  * Generate embedding for text using Google Gemini with retry logic
  * @param {string} text - Text to embed
  * @param {number} maxRetries - Maximum retry attempts (default: 3)
@@ -121,6 +132,7 @@ function cosineSimilarity(vecA, vecB) {
 
 module.exports = {
   initializeClient,
+  getClient,
   generateEmbedding,
   generateEmbeddingsBatch,
   cosineSimilarity,
