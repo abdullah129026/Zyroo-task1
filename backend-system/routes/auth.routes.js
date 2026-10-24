@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/auth.controller');
 const { authenticate } = require('../middleware/auth');
+const { authLimiter } = require('../middleware/rateLimit');
 
 /**
  * Public Routes
@@ -12,14 +13,14 @@ const { authenticate } = require('../middleware/auth');
  * Register a new user
  * Body: { name, email, password, passwordConfirm }
  */
-router.post('/register', authController.register);
+router.post('/register', authLimiter, authController.register);
 
 /**
  * POST /api/auth/login
  * Login user and receive JWT token
  * Body: { email, password }
  */
-router.post('/login', authController.login);
+router.post('/login', authLimiter, authController.login);
 
 /**
  * Protected Routes

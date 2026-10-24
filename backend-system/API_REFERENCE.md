@@ -725,3 +725,95 @@ curl -X POST http://localhost:3001/api/chat/sessions/<id>/messages \
 and the system prompt instructs the model to treat them as untrusted data
 that must never override instructions. A basic heuristic scan logs a warning
 when a chunk contains common instruction-override phrasings.
+
+---
+
+## Workspace Endpoints (Weeks 7-8)
+
+All workspace endpoints need a JWT. A workspace is owned by a Team plan
+user; members share its documents and chat sessions, and all workspace
+activity is metered against one shared usage pool at Team plan limits.
+Workspace resources stop being accessible if the owner leaves the Team
+plan.
+
+### POST /workspaces
+Create a workspace. Caller must be on the Team plan (403 otherwise).
+
+**Request:** `{ "name": "Team Space" }`
+**Response (201):** the workspace, with `members` (owner included, role
+`owner`), the shared `usage` counters, and `memberCount`.
+
+### GET /workspaces
+List every workspace the caller belongs to, as owner or member.
+
+### POST /workspaces/:id/invite
+Invite a member by email. Owner only. The invitee must already have an
+account: unregistered emails return 404, existing members 409.
+
+**Request:** `{ "email": "teammate@example.com" }`
+
+### DELETE /workspaces/:id/members/:userId
+Remove a member. The owner can remove anyone; a member can remove
+themselves (leave). The owner cannot be removed (400).
+
+### GET /workspaces/:id/documents
+List the workspace's shared documents. Members only (403 otherwise).
+
+### GET /workspaces/:id/chat-sessions
+List the workspace's shared chat sessions. Members only.
+
+### Sharing documents and chats
+- Upload with the optional `workspaceId` form field on `POST /documents`
+  to share a document into a workspace (membership checked, workspace
+  pool metered).
+- Create a session with `{ "workspaceId": "..." }` on
+  `POST /chat/sessions` to make it a shared session: members can read and
+  post, retrieval covers the workspace's documents, and each turn charges
+  the shared pool instead of the sender's personal quota.
+
+---
+
+## Admin Endpoints (Weeks 7-8)
+
+All admin endpoints need a JWT whose user has the `admin` role. Admin is
+bootstrapped from the `ADMIN_EMAILS` env var (applied at register/login);
+there is no seeded admin account. Non-admins get 403.
+
+### GET /admin/users
+All users with plan, status, subscription status and usage.
+Query: `?limit=` (default 100, max 500).
+
+### GET /admin/workspaces
+All workspaces with owner details and member counts.
+
+### PATCH /admin/users/:id/suspend
+Suspend or reactivate an account.
+**Request:** `{ "suspended": true }` suspends, `{ "suspended": false }`
+reactivates; omitting the field toggles the current status. Suspended
+users cannot log in and their existing tokens are rejected. An admin
+cannot suspend their own account.
+
+### GET /admin/analytics
+Platform analytics for the last 30 days:
+```json
+{
+  "windowDays": 30,
+  "messagesPerDay": [{ "date": "2026-10-24", "messages": 12 }],
+  "dailyActiveUsers": [{ "date": "2026-10-24", "activeUsers": 3 }],
+  "planDistribution": { "free": 40, "pro": 5, "team": 2 },
+  "subscriptions": { "byStatus": { "none": 42, "active": 4, "canceled": 1 }, "active": 4, "cancelled": 1 }
+}
+```
+
+---
+
+## API Documentation (Swagger)
+
+Interactive docs are served by the API itself:
+
+- Swagger UI: `GET /api/docs`
+- Raw OpenAPI 3 JSON: `GET /api/docs.json`
+
+Every operation in the spec states whether it needs a JWT; the only
+non-JWT write endpoint is `POST /api/webhooks/stripe`, which is
+authenticated by the `Stripe-Signature` header instead.

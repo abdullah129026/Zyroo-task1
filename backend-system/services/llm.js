@@ -34,6 +34,15 @@ async function generateChatCompletion(prompt, options = {}) {
       if (!text) {
         throw new Error('LLM returned an empty response');
       }
+      // Token usage logging: LLM calls are billed per token, so every
+      // call leaves a cost trail in the server logs (Weeks 7-8).
+      const usage = result.response.usageMetadata;
+      if (usage) {
+        console.log(
+          `[LLM] chat model=${options.model || CHAT_MODEL} promptTokens=${usage.promptTokenCount || 0} ` +
+            `completionTokens=${usage.candidatesTokenCount || 0} totalTokens=${usage.totalTokenCount || 0}`
+        );
+      }
       return text;
     } catch (error) {
       lastError = error;
@@ -109,6 +118,13 @@ async function streamChatCompletion(prompt, onToken, options = {}) {
     }
   }
   const finalResponse = await streamResult.response;
+  const usage = finalResponse.usageMetadata;
+  if (usage) {
+    console.log(
+      `[LLM] chat-stream model=${options.model || CHAT_MODEL} promptTokens=${usage.promptTokenCount || 0} ` +
+        `completionTokens=${usage.candidatesTokenCount || 0} totalTokens=${usage.totalTokenCount || 0}`
+    );
+  }
   return finalResponse.text() || fullText;
 }
 

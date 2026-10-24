@@ -1,5 +1,15 @@
 require('dotenv').config();
 
+// Fail fast in production: the auth middleware's development fallback
+// secret must never be what signs real tokens (Weeks 7-8 hardening).
+if (
+  process.env.NODE_ENV === 'production' &&
+  (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'your-secret-key')
+) {
+  console.error('[SERVER] JWT_SECRET must be set to a strong value in production. Refusing to start.');
+  process.exit(1);
+}
+
 const app = require('./app');
 const { connectDB, disconnectDB } = require('./config/db');
 const { initializeClient } = require('./services/embeddings');

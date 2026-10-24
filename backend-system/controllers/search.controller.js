@@ -13,6 +13,16 @@ async function semanticSearch(req, res) {
     const { userId } = req.user;
     const { query, documentId, topK = 5 } = req.body;
 
+    // Input length cap: a search query is embedded by the LLM provider,
+    // so an unbounded one is unbounded cost (Weeks 7-8 hardening)
+    const MAX_QUERY_CHARS = parseInt(process.env.SEARCH_MAX_QUERY_CHARS, 10) || 1000;
+    if (typeof query === 'string' && query.length > MAX_QUERY_CHARS) {
+      return res.status(400).json({
+        statusCode: 400,
+        message: `Query is too long (max ${MAX_QUERY_CHARS} characters)`,
+      });
+    }
+
     const results = await retrieveRelevantChunks({
       userId,
       query,

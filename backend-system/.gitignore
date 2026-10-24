@@ -24,3 +24,6 @@ Thumbs.db
 # Build / test output
 coverage/
 dist/
+
+# Uploaded user documents (runtime data, never source)
+uploads/

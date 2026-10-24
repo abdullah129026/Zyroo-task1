@@ -1,0 +1,40 @@
+# Render blueprint for the Cortex AI API (Weeks 7-8 deployment).
+# Create from the Render dashboard: New > Blueprint > select this repo.
+# Secrets (sync: false) are prompted for in the dashboard, never committed.
+#
+# Database: a MongoDB Atlas free (M0) cluster. Its connection string goes
+# into MONGODB_URI. Document embeddings live in the same database (the
+# Chunk collection), so Atlas doubles as the hosted vector store;
+# retrieval scores chunks in the app (services/retrieval.js).
+services:
+  - type: web
+    name: cortex-ai-api
+    runtime: node
+    rootDir: backend-system
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true # ponytail: Render-generated secret; rotate via dashboard if ever leaked
+      - key: MONGODB_URI
+        sync: false # Atlas connection string (mongodb+srv://...)
+      - key: GOOGLE_GEMINI_API_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: ADMIN_EMAILS
+        sync: false # your platform-owner email, for the admin role
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_PRO
+        sync: false
+      - key: STRIPE_PRICE_TEAM
+        sync: false
