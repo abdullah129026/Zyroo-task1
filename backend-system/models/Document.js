@@ -7,6 +7,15 @@ const documentSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    // Optional workspace scope (Weeks 7-8): when set, the document is
+    // shared with every workspace member and metered against the
+    // workspace's shared quota pool instead of the owner's personal one.
+    workspace: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Workspace',
+      default: null,
+      index: true,
+    },
     filename: {
       type: String,
       required: true,

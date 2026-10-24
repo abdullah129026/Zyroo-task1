@@ -3,9 +3,24 @@ const path = require('path');
 const Document = require('../models/Document');
 const Chunk = require('../models/Chunk');
 const User = require('../models/User');
+const Workspace = require('../models/Workspace');
 const { extractText } = require('../services/textExtraction');
 const { chunkText } = require('../services/chunking');
 const { generateEmbedding } = require('../services/embeddings');
+
+/**
+ * A document is visible to its owner, and to every member of its
+ * workspace when it is workspace-scoped.
+ */
+async function canAccessDocument(document, userId) {
+  if (document.owner.toString() === userId.toString()) return true;
+  if (!document.workspace) return false;
+  const membership = await Workspace.exists({
+    _id: document.workspace,
+    'members.user': userId,
+  });
+  return Boolean(membership);
+}
 
 async function uploadDocument(req, res) {
   try {
@@ -42,6 +57,9 @@ async function uploadDocument(req, res) {
 
     const document = new Document({
       owner: userId,
+      // Set when the upload was scoped to a workspace (resolved and
+      // membership-checked by resolveUploadWorkspace + quota middleware)
+      workspace: req.workspace ? req.workspace._id : null,
       filename: file.originalname,
       fileType,
       filePath: file.path,
@@ -51,13 +69,23 @@ async function uploadDocument(req, res) {
 
     await document.save();
 
-    // Usage accounting for the plan quota
-    await User.findByIdAndUpdate(userId, {
-      $inc: {
-        'usage.documentsUploaded': 1,
-        'usage.storageUsed': file.size,
-      },
-    });
+    // Usage accounting: workspace uploads draw from the workspace's
+    // shared pool, personal uploads from the owner's own quota
+    if (req.workspace) {
+      await Workspace.findByIdAndUpdate(req.workspace._id, {
+        $inc: {
+          'usage.documentsUploaded': 1,
+          'usage.storageUsed': file.size,
+        },
+      });
+    } else {
+      await User.findByIdAndUpdate(userId, {
+        $inc: {
+          'usage.documentsUploaded': 1,
+          'usage.storageUsed': file.size,
+        },
+      });
+    }
 
     processDocumentAsync(document._id);
 
@@ -187,9 +215,9 @@ async function getDocument(req, res) {
     const { id } = req.params;
     const { userId } = req.user;
 
-    const document = await Document.findOne({ _id: id, owner: userId });
+    const document = await Document.findById(id);
 
-    if (!document) {
+    if (!document || !(await canAccessDocument(document, userId))) {
       return res.status(404).json({
         statusCode: 404,
         message: 'Document not found',
@@ -223,9 +251,22 @@ async function deleteDocument(req, res) {
     const { id } = req.params;
     const { userId } = req.user;
 
-    const document = await Document.findOne({ _id: id, owner: userId });
+    const document = await Document.findById(id);
 
-    if (!document) {
+    // Deleting is stricter than viewing: only the document's owner, or
+    // the owner of the workspace the document was shared into.
+    let canDelete = false;
+    if (document) {
+      if (document.owner.toString() === userId.toString()) {
+        canDelete = true;
+      } else if (document.workspace) {
+        canDelete = Boolean(
+          await Workspace.exists({ _id: document.workspace, owner: userId })
+        );
+      }
+    }
+
+    if (!document || !canDelete) {
       return res.status(404).json({
         statusCode: 404,
         message: 'Document not found',

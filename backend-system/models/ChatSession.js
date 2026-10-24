@@ -8,6 +8,15 @@ const chatSessionSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // Optional workspace scope (Weeks 7-8): when set, workspace members
+    // can access the session and its messages are metered against the
+    // workspace's shared quota pool.
+    workspace: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Workspace',
+      default: null,
+      index: true,
+    },
     title: {
       type: String,
       default: 'New chat',

@@ -1,11 +1,19 @@
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
+const User = require('../models/User');
 
 /**
  * Authentication middleware
  * Verifies JWT token from Authorization header
  * Attaches decoded user info to req.user
+ *
+ * Weeks 7-8: also rejects suspended accounts. The suspension check does
+ * one user lookup, and only when the database is connected; if the DB is
+ * unreachable the request proceeds on the token alone (the server already
+ * runs in a degraded, read-mostly mode then), so a database outage never
+ * locks every user out.
  */
-const authenticate = (req, res, next) => {
+const authenticate = async (req, res, next) => {
   try {
     // Get token from Authorization header
     const authHeader = req.headers.authorization;
@@ -36,6 +44,23 @@ const authenticate = (req, res, next) => {
 
     // Attach user info to request
     req.user = decoded;
+
+    // Suspended accounts are blocked even with an otherwise valid token
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const account = await User.findById(decoded.userId).select('status').lean();
+        if (account && account.status === 'suspended') {
+          return res.status(403).json({
+            statusCode: 403,
+            data: null,
+            message: 'This account has been suspended'
+          });
+        }
+      } catch (lookupErr) {
+        console.warn('[Auth Middleware] Suspension check skipped:', lookupErr.message);
+      }
+    }
+
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {

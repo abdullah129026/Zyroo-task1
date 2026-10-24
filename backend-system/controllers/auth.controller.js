@@ -13,6 +13,24 @@ const generateToken = (userId) => {
 };
 
 /**
+ * Admin bootstrap (Weeks 7-8): emails listed in the ADMIN_EMAILS env var
+ * (comma-separated) are promoted to the admin role. Applied on register
+ * and login, so the platform owner gets admin access by configuring the
+ * environment, never by a seeded or hardcoded account.
+ */
+const applyAdminBootstrap = async (user) => {
+  const adminEmails = (process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  if (adminEmails.includes(user.email.toLowerCase()) && user.role !== 'admin') {
+    user.role = 'admin';
+    await user.save();
+  }
+  return user;
+};
+
+/**
  * Register a new user
  * POST /api/auth/register
  */
@@ -61,6 +79,8 @@ const register = async (req, res) => {
       email,
       password,
     });
+
+    await applyAdminBootstrap(user);
 
     // Return user without password
     return res.status(201).json({
@@ -117,6 +137,17 @@ const login = async (req, res) => {
         message: 'Invalid credentials'
       });
     }
+
+    // Suspended accounts cannot log in (Weeks 7-8 admin oversight)
+    if (user.status === 'suspended') {
+      return res.status(403).json({
+        statusCode: 403,
+        data: null,
+        message: 'This account has been suspended'
+      });
+    }
+
+    await applyAdminBootstrap(user);
 
     // Generate JWT token
     const token = generateToken(user._id);

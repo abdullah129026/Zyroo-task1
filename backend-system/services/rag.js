@@ -121,6 +121,7 @@ async function prepareRagPrompt({ userId, session, userText, history = [], topK 
     userId,
     query: userText,
     documentIds: session.documentIds && session.documentIds.length > 0 ? session.documentIds : null,
+    workspaceId: session.workspace || null,
     topK,
   });
 

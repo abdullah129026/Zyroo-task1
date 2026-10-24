@@ -1,7 +1,13 @@
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
-const uploadsDir = 'C:\\Users\\Shahid computers\\Downloads';
+// Upload destination: UPLOAD_DIR env var, or a project-local uploads/
+// folder by default. (Previously a hardcoded Windows path from local
+// development, which broke uploads on every other machine and on the
+// production host.) Created on startup when missing.
+const uploadsDir = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
+fs.mkdirSync(uploadsDir, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -31,7 +37,9 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 25 * 1024 * 1024,
+    // Upload size cap: bounds storage cost and abuse (override via env)
+    fileSize: parseInt(process.env.MAX_UPLOAD_BYTES, 10) || 25 * 1024 * 1024,
+    files: 1,
   },
 });
 

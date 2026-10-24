@@ -3,11 +3,14 @@ const ChatSession = require('../models/ChatSession');
 const ChatMessage = require('../models/ChatMessage');
 const Document = require('../models/Document');
 const User = require('../models/User');
+const Workspace = require('../models/Workspace');
 const { answerWithRag, prepareRagPrompt } = require('../services/rag');
 const { streamChatCompletion } = require('../services/llm');
 
 const DEFAULT_TITLE = 'New chat';
 const HISTORY_LIMIT = 8;
+// Hard cap on one chat message: bounds per-call LLM cost and abuse.
+const MAX_MESSAGE_CHARS = parseInt(process.env.CHAT_MAX_MESSAGE_CHARS, 10) || 4000;
 
 function isValidObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -19,6 +22,54 @@ async function getOwnedSession(sessionId, userId) {
 }
 
 /**
+ * Session access for workspace-era sessions: the owner always has
+ * access; a workspace-scoped session is also accessible to every member
+ * of that workspace.
+ */
+async function getAccessibleSession(sessionId, userId) {
+  if (!isValidObjectId(sessionId)) return null;
+  const session = await ChatSession.findById(sessionId);
+  if (!session) return null;
+  if (session.owner.toString() === userId.toString()) return session;
+  if (session.workspace) {
+    const membership = await Workspace.exists({
+      _id: session.workspace,
+      'members.user': userId,
+    });
+    if (membership) return session;
+  }
+  return null;
+}
+
+/**
+ * Meter one chat turn: workspace sessions draw from the workspace's
+ * shared pool, personal sessions from the user's own quota.
+ */
+async function chargeMessageUsage(session, userId) {
+  if (session.workspace) {
+    await Workspace.findByIdAndUpdate(session.workspace, {
+      $inc: { 'usage.messagesSent': 1 },
+    });
+  } else {
+    await User.findByIdAndUpdate(userId, { $inc: { 'usage.messagesSent': 1 } });
+  }
+}
+
+/**
+ * Shared validation for the two send paths (JSON + SSE stream).
+ * Returns an error message, or null when the content is acceptable.
+ */
+function validateMessageContent(content) {
+  if (!content || typeof content !== 'string' || content.trim().length === 0) {
+    return 'Message content is required';
+  }
+  if (content.trim().length > MAX_MESSAGE_CHARS) {
+    return `Message is too long (max ${MAX_MESSAGE_CHARS} characters)`;
+  }
+  return null;
+}
+
+/**
  * Create a chat session
  * POST /api/chat/sessions
  * @param {string} title - Optional session title
@@ -27,7 +78,19 @@ async function getOwnedSession(sessionId, userId) {
 async function createSession(req, res) {
   try {
     const { userId } = req.user;
-    const { title, documentIds } = req.body;
+    const { title, documentIds, workspaceId } = req.body;
+
+    // Optional workspace scope: caller must be a member of the workspace
+    let workspace = null;
+    if (workspaceId !== undefined && workspaceId !== null) {
+      if (!isValidObjectId(workspaceId)) {
+        return res.status(400).json({ statusCode: 400, message: 'workspaceId is not a valid id' });
+      }
+      workspace = await Workspace.findById(workspaceId);
+      if (!workspace || !workspace.memberOf(userId)) {
+        return res.status(404).json({ statusCode: 404, message: 'Workspace not found' });
+      }
+    }
 
     let scopedIds = [];
     if (documentIds !== undefined) {
@@ -38,8 +101,13 @@ async function createSession(req, res) {
       if (invalid.length > 0) {
         return res.status(400).json({ statusCode: 400, message: 'documentIds contains invalid ids' });
       }
-      const owned = await Document.find({ _id: { $in: documentIds }, owner: userId }).select('_id');
-      if (owned.length !== documentIds.length) {
+      // Accessible documents: the caller's own, plus the workspace's
+      // shared documents when the session is workspace-scoped
+      const accessFilter = workspace
+        ? { $or: [{ owner: userId }, { workspace: workspace._id }] }
+        : { owner: userId };
+      const accessible = await Document.find({ _id: { $in: documentIds }, ...accessFilter }).select('_id');
+      if (accessible.length !== documentIds.length) {
         return res.status(404).json({ statusCode: 404, message: 'One or more documents were not found' });
       }
       scopedIds = documentIds;
@@ -47,6 +115,7 @@ async function createSession(req, res) {
 
     const session = await ChatSession.create({
       owner: userId,
+      workspace: workspace ? workspace._id : null,
       title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : DEFAULT_TITLE,
       documentIds: scopedIds,
     });
@@ -69,7 +138,11 @@ async function createSession(req, res) {
 async function listSessions(req, res) {
   try {
     const { userId } = req.user;
-    const sessions = await ChatSession.find({ owner: userId }).sort({ updatedAt: -1 }).lean();
+    const myWorkspaces = await Workspace.find({ 'members.user': userId }).select('_id').lean();
+    const workspaceIds = myWorkspaces.map((w) => w._id);
+    const sessions = await ChatSession.find({
+      $or: [{ owner: userId }, { workspace: { $in: workspaceIds } }],
+    }).sort({ updatedAt: -1 }).lean();
     return res.status(200).json({
       statusCode: 200,
       data: { sessions, total: sessions.length },
@@ -88,7 +161,20 @@ async function listSessions(req, res) {
 async function deleteSession(req, res) {
   try {
     const { userId } = req.user;
-    const session = await getOwnedSession(req.params.id, userId);
+    // Deleting is owner-level: the session owner, or the owner of the
+    // workspace the session belongs to. Plain members can read and chat
+    // but cannot delete other members' sessions.
+    let session = await getOwnedSession(req.params.id, userId);
+    if (!session && isValidObjectId(req.params.id)) {
+      const candidate = await ChatSession.findById(req.params.id);
+      if (candidate && candidate.workspace) {
+        const ownsWorkspace = await Workspace.exists({
+          _id: candidate.workspace,
+          owner: userId,
+        });
+        if (ownsWorkspace) session = candidate;
+      }
+    }
     if (!session) {
       return res.status(404).json({ statusCode: 404, message: 'Chat session not found' });
     }
@@ -118,11 +204,12 @@ async function sendMessage(req, res) {
     const { userId } = req.user;
     const { content, topK = 5 } = req.body;
 
-    if (!content || typeof content !== 'string' || content.trim().length === 0) {
-      return res.status(400).json({ statusCode: 400, message: 'Message content is required' });
+    const contentError = validateMessageContent(content);
+    if (contentError) {
+      return res.status(400).json({ statusCode: 400, message: contentError });
     }
 
-    const session = await getOwnedSession(req.params.id, userId);
+    const session = await getAccessibleSession(req.params.id, userId);
     if (!session) {
       return res.status(404).json({ statusCode: 404, message: 'Chat session not found' });
     }
@@ -167,8 +254,9 @@ async function sendMessage(req, res) {
       await ChatSession.updateOne({ _id: session._id }, { $set: { updatedAt: new Date() } });
     }
 
-    // Usage accounting (one chat turn = one message, same as search)
-    await User.findByIdAndUpdate(userId, { $inc: { 'usage.messagesSent': 1 } });
+    // Usage accounting (one chat turn = one message, same as search);
+    // workspace sessions charge the shared workspace pool
+    await chargeMessageUsage(session, userId);
 
     return res.status(200).json({
       statusCode: 200,
@@ -199,7 +287,7 @@ async function sendMessage(req, res) {
 async function getMessages(req, res) {
   try {
     const { userId } = req.user;
-    const session = await getOwnedSession(req.params.id, userId);
+    const session = await getAccessibleSession(req.params.id, userId);
     if (!session) {
       return res.status(404).json({ statusCode: 404, message: 'Chat session not found' });
     }
@@ -233,11 +321,12 @@ async function sendMessageStream(req, res) {
     const { userId } = req.user;
     const { content, topK = 5 } = req.body;
 
-    if (!content || typeof content !== 'string' || content.trim().length === 0) {
-      return res.status(400).json({ statusCode: 400, message: 'Message content is required' });
+    const contentError = validateMessageContent(content);
+    if (contentError) {
+      return res.status(400).json({ statusCode: 400, message: contentError });
     }
 
-    const session = await getOwnedSession(req.params.id, userId);
+    const session = await getAccessibleSession(req.params.id, userId);
     if (!session) {
       return res.status(404).json({ statusCode: 404, message: 'Chat session not found' });
     }
@@ -299,7 +388,7 @@ async function sendMessageStream(req, res) {
         await ChatSession.updateOne({ _id: session._id }, { $set: { updatedAt: new Date() } });
       }
 
-      await User.findByIdAndUpdate(userId, { $inc: { 'usage.messagesSent': 1 } });
+      await chargeMessageUsage(session, userId);
 
       if (!finished) sendEvent({ done: true, sources, chunksUsed });
     } catch (streamError) {

@@ -2,14 +2,16 @@ const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const { requireQuota } = require('../middleware/quota');
+const { resolveUploadWorkspace } = require('../middleware/workspace');
 const upload = require('../middleware/upload');
 const documentController = require('../controllers/document.controller');
 
 /**
  * POST /api/documents
- * Upload a document (PDF, DOCX, TXT)
+ * Upload a document (PDF, DOCX, TXT). An optional workspaceId form field
+ * shares the document with that workspace and meters its shared pool.
  */
-router.post('/', authenticate, upload.single('file'), requireQuota('documents'), documentController.uploadDocument);
+router.post('/', authenticate, upload.single('file'), resolveUploadWorkspace, requireQuota('documents'), documentController.uploadDocument);
 
 /**
  * GET /api/documents

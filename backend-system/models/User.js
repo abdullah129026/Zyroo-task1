@@ -26,6 +26,19 @@ const userSchema = new mongoose.Schema(
       minlength: [6, 'Password must be at least 6 characters long'],
       select: false, // Don't return password by default in queries
     },
+    // Platform role & account status (Weeks 7-8)
+    // role: 'admin' is granted via the ADMIN_EMAILS bootstrap (see
+    // controllers/auth.controller.js) or set directly by an existing admin.
+    role: {
+      type: String,
+      enum: ['user', 'admin'],
+      default: 'user',
+    },
+    status: {
+      type: String,
+      enum: ['active', 'suspended'],
+      default: 'active',
+    },
     // Subscription & billing (Week 6)
     plan: {
       type: String,
