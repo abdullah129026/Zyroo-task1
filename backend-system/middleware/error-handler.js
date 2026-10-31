@@ -1,5 +1,5 @@
 /**
- * 404 handler - catches requests that matched no route.
+ * 404 handler 
  * Passes a 404 error to the global error handler.
  */
 const notFound = (req, _res, next) => {
@@ -10,7 +10,7 @@ const notFound = (req, _res, next) => {
 /**
  * Global error-handling middleware.
  * Returns consistent JSON error responses for every error in the app.
- * Stack traces are only exposed in development.
+ 
  */
 const errorHandler = (err, _req, res, _next) => {
   const statusCode = err.statusCode || err.status || 500;
